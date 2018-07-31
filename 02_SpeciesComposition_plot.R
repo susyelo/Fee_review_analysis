@@ -31,7 +31,7 @@ spOcc_geo<-st_transform(spOcc_geo, "+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=
 
 spOcc$biomes<-over(as(spOcc_geo, "Spatial"), as(biome_shp, "Spatial"))
 
-tmp<-as.data.frame(st_join(pts, poly, join = st_intersects))[2] %>% setNames("ID")
+tmp<-as.data.frame(st_join(spOcc_geo, biome_shp, join = st_intersects))[2] %>% setNames("ID")
 
 
 ms_p<-st_transform(ms, ref_crs)
