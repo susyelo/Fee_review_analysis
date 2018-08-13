@@ -9,6 +9,7 @@ library(wesanderson)
 library(dendextend)
 library(sf)
 library(gplots)
+library(ggplot2)
 
 # data --------------------------------------------------------------------
 # 1. Presence of species in cells
@@ -22,27 +23,47 @@ biome_shp<-st_read("./data/maps/Olson_processed/Biomes_olson_projected.shp")
 # PROCEDURE
 ###############
 
-# 1. Convert to spatial data frame
-spOcc_geo<-st_as_sf(spOcc, coords = c("longitude","latitude"), 
-crs = "+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
+### define coordinates and convert to SpatialPointsDataFrame
+## Working with a subset
+occ = spOcc[sample(nrow(spOcc), 1000), ]
 
-# 2. Make sure both files have the same projection
-spOcc_geo<-st_transform(spOcc_geo, "+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
-
-spOcc$biomes<-over(as(spOcc_geo, "Spatial"), as(biome_shp, "Spatial"))
-
-tmp<-as.data.frame(st_join(spOcc_geo, biome_shp, join = st_intersects))[2] %>% setNames("ID")
+spOcc_geo<-
+  st_as_sf(occ, coords = c("longitude","latitude"),
+           crs = 4326)
 
 
-ms_p<-st_transform(ms, ref_crs)
-ref_crs<-st_crs(biome_shp)
+spOcc_geo<-st_transform(spOcc_geo,"+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
 
-tmp<-
-ms %>% 
-  filter(grepl("Abarema acreana",scrubbed_species_binomial))
+# create 100km grid 
+grid_100 <- st_make_grid(biome_shp, cellsize = c(300000, 300000)) %>% 
+  st_sf(grid_id = 1:length(.))
 
-int <- st_intersection(tmp,biome_shp)[[1]]
- 
+
+# create labels for each grid_id
+grid_lab <- st_centroid(grid_100) %>% cbind(st_coordinates(.))     
+                  
+               
+# view the sampled points, polygons and grid
+ggplot() +
+  geom_sf(data = biome_shp[biome_shp$biomes=="Moist_Forest",], fill = 'white', lwd = 0.05) +
+  geom_sf(data = spOcc_geo[1,], color = 'red', size = 1.7) + 
+  geom_sf(data = grid_100, fill = 'transparent', lwd = 0.3) +
+  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2) +
+  coord_sf(datum = NA)  +
+  labs(x = "") +
+  labs(y = "")
+
+
+ggplot() +
+  geom_sf(data = grid_100, fill = 'transparent', lwd = 0.3) +
+  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2)
+
+# which grid square is each point in?
+spOcc_geo[1,] %>% st_join(grid_100, join = st_intersects) %>% as.data.frame
+
+## Starts from here!!
+
+
 ## Extract the biome classification for each grid cell
 # Also extract the area cover for each biome in each grid cell
 Cells_biomes2<-
