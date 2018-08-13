@@ -35,7 +35,7 @@ spOcc_geo<-
 spOcc_geo<-st_transform(spOcc_geo,"+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
 
 # create 100km grid 
-grid_100 <- st_make_grid(biome_shp, cellsize = c(300000, 300000)) %>% 
+grid_100 <- st_make_grid(biome_shp, cellsize = c(100000, 100000)) %>% 
   st_sf(grid_id = 1:length(.))
 
 
