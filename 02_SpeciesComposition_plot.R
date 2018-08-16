@@ -34,10 +34,21 @@ spOcc_geo<-
 
 spOcc_geo<-st_transform(spOcc_geo,"+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
 
-# create 100km grid 
+# create 100km grid with grid_id as the name of the biomes
+
+
+grid_biome <- function(x){
+  st_make_grid(biome_shp[biome_shp$biomes==x,], cellsize = c(100000, 100000)) %>%
+    st_sf(grid_id = rep(x,length(.)))
+}
+  
+grid_100_biomes<-lapply(biome_shp$biomes,grid_biome) %>% rbindlist() %>% st_sf()
+
+tmp<-st_sf(rbindlist(grid_100_biomes))
+
+
 grid_100 <- st_make_grid(biome_shp, cellsize = c(100000, 100000)) %>% 
   st_sf(grid_id = 1:length(.))
-
 
 # create labels for each grid_id
 grid_lab <- st_centroid(grid_100) %>% cbind(st_coordinates(.))     
@@ -59,7 +70,17 @@ ggplot() +
   geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2)
 
 # which grid square is each point in?
-spOcc_geo[1,] %>% st_join(grid_100, join = st_intersects) %>% as.data.frame
+spOcc_geo[1,] %>% st_join(grid_100_biomes, join = st_intersects) %>% as.data.frame
+
+
+# Ref: https://gis.stackexchange.com/questions/282750/identify-polygon-containing-point-with-r-sf-package
+# intersect and extract state name
+region <- apply(st_intersects(spOcc_geo[1:100,],biome_shp, sparse = FALSE), 1, 
+                     function(col) { 
+                       biome_shp[which(col), ]$biomes
+                     })
+
+
 
 ## Starts from here!!
 
