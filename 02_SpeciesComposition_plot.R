@@ -10,6 +10,7 @@ library(dendextend)
 library(sf)
 library(gplots)
 library(ggplot2)
+library(data.table)
 
 # data --------------------------------------------------------------------
 # 1. Presence of species in cells
@@ -31,29 +32,35 @@ spOcc_geo<-
   st_as_sf(occ, coords = c("longitude","latitude"),
            crs = 4326)
 
-
 spOcc_geo<-st_transform(spOcc_geo,"+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
 
 # create 100km grid with grid_id as the name of the biomes
-
-
-grid_biome <- function(x){
-  st_make_grid(biome_shp[biome_shp$biomes==x,], cellsize = c(100000, 100000)) %>%
-    st_sf(grid_id = rep(x,length(.)))
-}
-  
-grid_100_biomes<-lapply(biome_shp$biomes,grid_biome) %>% rbindlist() %>% st_sf()
-
-tmp<-st_sf(rbindlist(grid_100_biomes))
-
-
-grid_100 <- st_make_grid(biome_shp, cellsize = c(100000, 100000)) %>% 
+grid_100_id <- st_make_grid(biome_shp, cellsize = c(100000, 100000)) %>% 
   st_sf(grid_id = 1:length(.))
 
-# create labels for each grid_id
-grid_lab <- st_centroid(grid_100) %>% cbind(st_coordinates(.))     
-                  
-               
+## rasterize biomes
+library(fasterize)
+
+r_ref <- raster(biome_shp)
+res(r_ref) <- 10000
+r_ref[] <- 1:ncell(r_ref)
+
+## Rasterize the biomes
+# https://cran.r-project.org/web/packages/fasterize/vignettes/using-fasterize.html
+biomes_ras <- fasterize(biome_shp, r_ref, field = "biomes")
+
+## convert raster biomes into small polygons
+p_biomes <-
+  biomes_ras %>% 
+  rasterToPolygons() %>% 
+  st_as_sf
+
+
+## Check the attributes of the spatial objects
+ggplot() +
+  geom_sf(data = p[p$layer==4,], fill = 'white', lwd = 0.05) +
+  geom_sf(data = p_r_ref, fill = 'transparent', lwd = 0.3)
+
 # view the sampled points, polygons and grid
 ggplot() +
   geom_sf(data = biome_shp[biome_shp$biomes=="Moist_Forest",], fill = 'white', lwd = 0.05) +
@@ -65,13 +72,29 @@ ggplot() +
   labs(y = "")
 
 
-ggplot() +
-  geom_sf(data = grid_100, fill = 'transparent', lwd = 0.3) +
-  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2)
+grid_tmp<-st_make_grid(biome_shp[biome_shp$biomes=="Moist_Forest",], 
+                  cellsize = c(1000000, 1000000)) %>% 
+  st_sf(grid_id = 1:length(.))
+
+# create labels for each grid_id
+grid_lab <- st_centroid(grid_tmp) %>% cbind(st_coordinates(.))  
+
+geo_tmp <- spOcc_geo[grep("Solanum",spOcc_geo$scrubbed_species_binomial),]
+
+ggplot() + 
+  geom_sf(data = biome_shp[biome_shp$biomes=="Moist_Forest",], fill = 'white', lwd = 0.05) + 
+  geom_sf(data = grid_tmp, fill = 'transparent', lwd = 0.3) +
+  geom_sf(data = geo_tmp, color = "red") +
+  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2) +
+  coord_sf(datum = NA)  +
+  labs(x = "") +
+  labs(y = "")
 
 # which grid square is each point in?
-spOcc_geo[1,] %>% st_join(grid_100_biomes, join = st_intersects) %>% as.data.frame
+geo_tmp %>% st_join(grid_tmp, join = st_intersects) %>% as.data.frame
 
+## Extract the layer per each coordinate
+geo_tmp %>% st_join(p, join = st_intersects) %>% as.data.frame
 
 # Ref: https://gis.stackexchange.com/questions/282750/identify-polygon-containing-point-with-r-sf-package
 # intersect and extract state name
@@ -80,7 +103,16 @@ region <- apply(st_intersects(spOcc_geo[1:100,],biome_shp, sparse = FALSE), 1,
                        biome_shp[which(col), ]$biomes
                      })
 
+grid_100$biome <- apply(st_intersects(biome_shp, grid_100, sparse = FALSE), 1, 
+                        function(col) { 
+                          biome_shp[which(col), ]$biomes
+                        })
 
+# This looks like it works
+apply(st_intersects(biome_shp, grid_100[1:100,], sparse = FALSE), 2, 
+      function(col) { 
+        biome_shp[which(col), ]$biomes
+      })
 
 ## Starts from here!!
 
