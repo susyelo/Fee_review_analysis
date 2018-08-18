@@ -24,131 +24,36 @@ biome_shp<-st_read("./data/maps/Olson_processed/Biomes_olson_projected.shp")
 # PROCEDURE
 ###############
 
-### define coordinates and convert to SpatialPointsDataFrame
-## Working with a subset
-occ = spOcc[sample(nrow(spOcc), 1000), ]
+### Define coordinates and convert to SpatialPointsDataFrame
+
+# Select variables and eliminate duplicates coordinates
+spOcc <- spOcc %>% 
+  select(scrubbed_species_binomial, longitude, latitude) %>% 
+  distinct()
 
 spOcc_geo<-
-  st_as_sf(occ, coords = c("longitude","latitude"),
+  st_as_sf(spOcc, coords = c("longitude","latitude"),
            crs = 4326)
 
 spOcc_geo<-st_transform(spOcc_geo,"+proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs")
 
+
+### Procedure with all the data
+
 # create 100km grid with grid_id as the name of the biomes
-grid_100_id <- st_make_grid(biome_shp, cellsize = c(100000, 100000)) %>% 
+grid_100_id <- st_make_grid(biome_shp, cellsize = c(200000, 200000)) %>% 
   st_sf(grid_id = 1:length(.))
 
-## rasterize biomes
-library(fasterize)
+system.time({
+  sp_grid_biomes = spOcc_geo[1:10000,] %>% 
+    st_join(grid_100_id, join = st_intersects) %>% 
+    st_join(biome_shp, join = st_intersects)
+})
 
-r_ref <- raster(biome_shp)
-res(r_ref) <- 10000
-r_ref[] <- 1:ncell(r_ref)
+sp_grid_biomes = spOcc_geo %>% 
+  st_join(grid_100_id, join = st_intersects) %>% 
+  st_join(biome_shp, join = st_intersects)
 
-## Rasterize the biomes
-# https://cran.r-project.org/web/packages/fasterize/vignettes/using-fasterize.html
-biomes_ras <- fasterize(biome_shp, r_ref, field = "biomes")
-
-## convert raster biomes into small polygons
-p_biomes <-
-  biomes_ras %>% 
-  rasterToPolygons() %>% 
-  st_as_sf
-
-
-## Check the attributes of the spatial objects
-ggplot() +
-  geom_sf(data = p[p$layer==4,], fill = 'white', lwd = 0.05) +
-  geom_sf(data = p_r_ref, fill = 'transparent', lwd = 0.3)
-
-# view the sampled points, polygons and grid
-ggplot() +
-  geom_sf(data = biome_shp[biome_shp$biomes=="Moist_Forest",], fill = 'white', lwd = 0.05) +
-  geom_sf(data = spOcc_geo[1,], color = 'red', size = 1.7) + 
-  geom_sf(data = grid_100, fill = 'transparent', lwd = 0.3) +
-  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2) +
-  coord_sf(datum = NA)  +
-  labs(x = "") +
-  labs(y = "")
-
-
-grid_tmp<-st_make_grid(biome_shp[biome_shp$biomes=="Moist_Forest",], 
-                  cellsize = c(1000000, 1000000)) %>% 
-  st_sf(grid_id = 1:length(.))
-
-# create labels for each grid_id
-grid_lab <- st_centroid(grid_tmp) %>% cbind(st_coordinates(.))  
-
-geo_tmp <- spOcc_geo[grep("Solanum",spOcc_geo$scrubbed_species_binomial),]
-
-ggplot() + 
-  geom_sf(data = biome_shp[biome_shp$biomes=="Moist_Forest",], fill = 'white', lwd = 0.05) + 
-  geom_sf(data = grid_tmp, fill = 'transparent', lwd = 0.3) +
-  geom_sf(data = geo_tmp, color = "red") +
-  geom_text(data = grid_lab, aes(x = X, y = Y, label = grid_id), size = 2) +
-  coord_sf(datum = NA)  +
-  labs(x = "") +
-  labs(y = "")
-
-# which grid square is each point in?
-geo_tmp %>% st_join(grid_tmp, join = st_intersects) %>% as.data.frame
-
-## Extract the layer per each coordinate
-geo_tmp %>% st_join(p, join = st_intersects) %>% as.data.frame
-
-# Ref: https://gis.stackexchange.com/questions/282750/identify-polygon-containing-point-with-r-sf-package
-# intersect and extract state name
-region <- apply(st_intersects(spOcc_geo[1:100,],biome_shp, sparse = FALSE), 1, 
-                     function(col) { 
-                       biome_shp[which(col), ]$biomes
-                     })
-
-grid_100$biome <- apply(st_intersects(biome_shp, grid_100, sparse = FALSE), 1, 
-                        function(col) { 
-                          biome_shp[which(col), ]$biomes
-                        })
-
-# This looks like it works
-apply(st_intersects(biome_shp, grid_100[1:100,], sparse = FALSE), 2, 
-      function(col) { 
-        biome_shp[which(col), ]$biomes
-      })
-
-## Starts from here!!
-
-
-## Extract the biome classification for each grid cell
-# Also extract the area cover for each biome in each grid cell
-Cells_biomes2<-
-  foreach(i=1:length(biome_shp$biomes), .combine = rbind)%do%
-  
-  {
-    print(paste("Extract cells from",biome_shp$biomes[i]))
-    biome_tmp<-biome_shp[i,]
-    int <- as_tibble(st_intersection(st_buffer(biome_tmp, 0),ms))
-    int$areaBiome <- st_area(int$geometry)
-    
-    int
-  }
-
-## Area of a pixel
-area_ref<-st_area(p[1,])
-
-# Calculate the proportion of pixel area in each biome
-tb_biome <- 
-  Cells_biomes %>%
-  group_by(cell) %>%
-  mutate(areaProp = (areaBiome*100)/area_ref) %>% 
-  mutate(maxArea=max(areaProp))
-
-## Select the biome that have the highest proportion of land of the pixel. 
-tb_biome <- 
-  tb_biome %>% 
-  filter(areaProp==maxArea) %>% 
-  dplyr::select(biomes,cell)
-
-spPresence_biome<-merge(spPresence, tb_biome, by.x="cells", by.y="cell")
-saveRDS(spPresence_biome, file="./outputs/spPresence_biomes_all.rds")
 
 ## Number of cells per species in each biome
 cells_in_sp<-spPresence_biome %>% 
