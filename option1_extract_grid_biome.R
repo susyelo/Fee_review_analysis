@@ -1,9 +1,15 @@
 ## Option 1. Using the raster package
 biome_shp <- shapefile("./data/maps/Olson_processed/Biomes_olson_projected.shp")
 
+
+## Using Richness raster as template raster
+r_Total_Rich<-raster("./data/base/BIEN_2_Ranges/richness100km.tif")
+
+
 ## Occurrence data
 spOcc <- spOcc %>% 
-  select(scrubbed_species_binomial, longitude, latitude)
+  select(scrubbed_species_binomial, longitude, latitude) %>% 
+  filter ((longitude >= -180 & longitude <= 180) & (latitude >= -90 & latitude <= 90))
 
 ## Get rid of duplicate occurrences
 dups <- duplicated(spOcc)
@@ -11,11 +17,10 @@ spOcc2 <- spOcc[!dups, ] # Around 12807047 duplicates
 
 spOcc_geo <- spOcc2
 coordinates(spOcc_geo) <- c("longitude", "latitude")
-crs(spOcc_geo) <- CRS("+init=epsg:4326") # WGS 84
+crs(spOcc_geo) <- CRS("+proj=longlat +ellps=WGS84") # WGS 84
 
-## Rasterize Biomes shapefile
-r_ref <- raster(biome_shp)
-res(r_ref) <- 100000
+## Rasterize Biomes shapefile 100 km^2
+r_ref <- r_Total_Rich
 r_ref[] <- 1:ncell(r_ref)
 
 ## Rasterize the biomes
@@ -23,19 +28,36 @@ r_ref[] <- 1:ncell(r_ref)
 biomes_ras <- rasterize(biome_shp, r_ref)
 
 ## Make sure coordinates have the same projection
-CRS.new <- CRS(" +proj=laea +lat_0=15 +lon_0=-80 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs
-+ellps=WGS84 +towgs84=0,0,")
-spOcc_geo<-spTransform(spOcc_geo, CRS.new)
+spOcc_geo <- spTransform(spOcc_geo, crs(r_ref))
 
 ## Create species, grid ID, biome dataframe
+system.time({
 spOcc_geo$grid_id <- raster::extract(r_ref,spOcc_geo,factors=TRUE)
 spOcc_geo$Biomes <- raster::extract(biomes_ras,spOcc_geo,factors=TRUE)
+})
+
+cell_nas <- which(is.na(spOcc_geo$Biomes))
 
 
+# then take the raster value with lowest distance to point AND non-NA value in the raster
+cell_nearest <- function(xy) {
+  
+  biomes_ras@data@values[which.min(replace(distanceFromPoints(biomes_ras, xy), is.na(biomes_ras), NA))]
+
+}
+
+# This takes around two hours to finish
+system.time({
+sampled = apply(X = coordinates(spOcc_geo[cell_nas,]), MARGIN = 1, FUN = cell_nearest)
+})
+
+spOcc_geo$Biomes[cell_nas] <- sampled
+
+write_rds(spOcc_geo,"./outputs/02_Species_grid_id_biomes_df.rds")
 
 ### Example with the sf package
 ## Example 
-grid_tmp<-st_make_grid(biome_shp, 
+grid_tmp <- st_make_grid(biome_shp, 
                        cellsize = c(1000000, 1000000)) %>%
   st_sf(grid_id = 1:length(.))
 
