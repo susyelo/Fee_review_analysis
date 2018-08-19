@@ -1,7 +1,6 @@
 # libraries ---------------------------------------------------------------
 library(raster)
 library(tidyverse)
-library(foreach)
 library(fuzzySim)
 library(circlize)
 library(RColorBrewer)
@@ -11,6 +10,7 @@ library(sf)
 library(gplots)
 library(ggplot2)
 library(data.table)
+library(foreach)
 
 # data --------------------------------------------------------------------
 # 1. Presence of species in cells and biomes
@@ -41,8 +41,8 @@ cells_in_sp$Biomes<-recode(cells_in_sp$Biomes,Moist_Forest="Moist",
                                  Tundra="Tundra")
 
 # 2. Species list for each biome ------------------------------------------
-
 cells_in_sp$Species <- cells_in_sp$scrubbed_species_binomial
+
 # 2.1 Total numbr of species
 Total_sp_list<-tapply(cells_in_sp$Species,cells_in_sp$Biomes,unique)
 
@@ -84,31 +84,19 @@ rownames(spSimilarity)<-names(biome_richness)
 
 # 4.1 Species composition among biomes using all the species
 
-biome_order<-c("Moist","Savannas","Dry",
-               "Xeric","Trop_Grass",
-               "Coniferous","Temp_Mixed","Temp_Grass",
-               "Mediterranean","Taiga","Tundra")
-
-spSimilarity_1<-spSimilarity[biome_order,biome_order]
-
-
 col=c(wes_palette("Darjeeling1",6,type="continuous"),
       wes_palette("Cavalcanti1",5,type="continuous"))
 
-diag(spSimilarity_1)<-0
-colnames(spSimilarity_1)<-c("Moist","Savannas","Dry",
-                            "Xeric","Trop_Grass",
-                            "Coniferous","Temp_Mixed","Temp_Grass",
-                            "Mediterranean","Taiga","Tundra")
+diag(spSimilarity)<-0
 
-indx<-match(colnames(spSimilarity_1),names(prop_endemics))
-colnames(spSimilarity_1)<-paste(colnames(spSimilarity_1),", ", prop_endemics[indx],"%", sep="")
+indx<-match(colnames(spSimilarity),names(prop_endemics))
+colnames(spSimilarity)<-paste(colnames(spSimilarity),", ", prop_endemics[indx],"%", sep="")
 
-rownames(spSimilarity_1)<-colnames(spSimilarity_1)
+rownames(spSimilarity)<-colnames(spSimilarity)
 
 pdf("./figs/species_composition/Total_similarity_biomes_withEndemics.pdf")
 par(mar=c(0, 0, 0, 0))
-chordDiagram(spSimilarity_1, annotationTrack = "grid", preAllocateTracks = 1, grid.col =col,symmetric = TRUE,
+chordDiagram(spSimilarity, annotationTrack = "grid", preAllocateTracks = 1, grid.col =col,symmetric = TRUE,
              column.col = col)
 circos.trackPlotRegion(track.index = 1, panel.fun = function(x, y) {
   xlim = get.cell.meta.data("xlim")
@@ -138,6 +126,11 @@ spSimilarity_ma<-matrix(data = spSimilarity_Wides$Sp_shared, nrow = n_distinct(s
 rownames(spSimilarity_ma)<-unique(spSimilarity_Wides$from)
 colnames(spSimilarity_ma)<-unique(spSimilarity_Wides$to)
 
+biome_order<-c("Moist","Savannas","Dry",
+               "Xeric","Trop_Grass",
+               "Coniferous","Temp_Mixed","Temp_Grass",
+               "Mediterranean","Taiga","Tundra")
+
 spSimilarity_ma<-spSimilarity_ma[biome_order,biome_order]
 
 ## Print file to include into the supplementary information
@@ -146,11 +139,6 @@ write.csv(spSimilarity_ma,"./supp_info/Shared_species_matrix.csv")
 
 diag(spSimilarity_ma)<-0
 Wides_sp_total<-unlist(lapply(Wides_sp_list,length))
-
-# Rename biomes
-colnames(spSimilarity_ma)<-c("Moist","Savannas","Dry",
-                             "Xeric","Trop Grass","Coniferous","Temp Mixed",
-                             "Temp Grass","Mediterranean","Taiga","Tundra")
 
 
 ## Proportion of widespread species
@@ -162,7 +150,7 @@ prop_widespread<-round(Wides_sp_total/total_n,2)*100
 colnames(spSimilarity_ma)<-paste(colnames(spSimilarity_ma),", ", prop_widespread[biome_order],"%", sep="")
 rownames(spSimilarity_ma)<-colnames(spSimilarity_ma)
 
-pdf("./figs/species_composition/Total_similarity_biomes_DominantSp.pdf",width = 8, height = 8)
+pdf("./figs/03_Total_similarity_biomes_DominantSp_Occ.pdf",width = 8, height = 8)
 par(mar=c(0, 0, 0, 0))
 chordDiagram(spSimilarity_ma,column.col = col,
              grid.col =col, directional = -1, 
@@ -218,12 +206,10 @@ dend_total<-
   fit_total_sim %>% 
   as.dendrogram() %>% 
   color_branches(1,col=wes_palette("Cavalcanti1")[2]) %>% 
-  set("branches_lwd", 4)  %>% 
-  set("labels_cex", 1.5)
+  dendextend::set("branches_lwd", 4)  %>% 
+  dendextend::set("labels_cex", 1.5)
 
-pdf("./figs/species_composition/species_composition_cluster_allsp.pdf", height = 9.7, width = 9.6)
 circlize_dendrogram(dend_total,dend_track_height = 0.7,labels_track_height = 0.2)
-dev.off()
 
 ### Heatmaps
 
@@ -233,13 +219,12 @@ my_palette <- colorRampPalette(c(wes_palette("Cavalcanti1")[2],
 
 my_palette <-rev(colorRampPalette(c('#ffffcc','#c2e699','#78c679','#31a354','#006837','#006837'))(n = 100))
 
-
 my_palette <-colorRampPalette(c("#02401b","#02401b","#32806e","white"))(n = 100)
 
 
 col_breaks<-seq(0,1,by=0.01)
 
-pdf("./figs/species_composition/species_composition_heatmap.pdf", width = 10)
+pdf("./figs/03_species_composition_heatmap.pdf", width = 10)
 heatmap.2(as.matrix(1-Total_similarity), symm = TRUE,
           distfun = function(x) as.dist(x),dendrogram = "both",margins = c(12,10),
           revC = TRUE,
@@ -249,27 +234,4 @@ heatmap.2(as.matrix(1-Total_similarity), symm = TRUE,
           key.xlab = "",
           col=my_palette,
           breaks=col_breaks)
-dev.off()
-
-
-## Dissimilarity with dominant species
-Dominant_similarity<-Similarity_sp_biomes(Wides_sp_list)
-fit_Dominant_similarity <-hclust(as.dist(1-Dominant_similarity))
-
-## Check the order first
-#labels(fit_Dominant_similarity)
-labels(fit_Dominant_similarity)<-c("Taiga","Tundra","Mediterranean", "Trop grass", 
-                                   "Trop Dry", "Xeric","Moist","Savannas", 
-                                   "Coniferous", 
-                                   "Temp Grass","Temp Mixed")
-  
-dend_dom<-
-  fit_Dominant_similarity %>% 
-  as.dendrogram() %>% 
-  color_branches(1,col=wes_palette("Cavalcanti")[3]) %>% 
-  set("branches_lwd", 4) %>% 
-  set("labels_cex", 1.5)
-
-pdf("./figs/species_composition/species_composition_cluster_Dominant_sp.pdf", height = 10, width = 9.1)
-circlize_dendrogram(dend_dom,dend_track_height = 0.7,labels_track_height = 0.2)
 dev.off()
