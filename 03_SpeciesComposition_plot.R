@@ -13,78 +13,22 @@ library(ggplot2)
 library(data.table)
 
 # data --------------------------------------------------------------------
-# 1. Presence of species in cells
-spOcc<-readRDS("./data/base/2018_02_08_BIEN_OccurData.RData")
+# 1. Presence of species in cells and biomes
+spOcc_geo<-readRDS("outputs/02_Species_grid_id_biomes_df.rds")
 
-# 2. Shapefiles
-biome_shp <- shapefile("./data/maps/Olson_processed/Biomes_olson_projected.shp")
-
-
-# 3. Using Richness raster as template raster
-r_Total_Rich<-raster("./data/base/BIEN_2_Ranges/richness100km.tif")
-
-
-## Cleaning Occurrence data
-spOcc <- spOcc %>% 
-  select(scrubbed_species_binomial, longitude, latitude) %>% 
-  filter ((longitude >= -180 & longitude <= 180) & (latitude >= -90 & latitude <= 90))
-
-## Get rid of duplicate occurrences
-dups <- duplicated(spOcc)
-spOcc2 <- spOcc[!dups, ] # Around 12807047 duplicates
-
-spOcc_geo <- spOcc2
-coordinates(spOcc_geo) <- c("longitude", "latitude")
-crs(spOcc_geo) <- CRS("+proj=longlat +ellps=WGS84") # WGS 84
-
-## Rasterize Biomes shapefile 100 km^2
-r_ref <- r_Total_Rich
-r_ref[] <- 1:ncell(r_ref)
-
-## Rasterize the biomes
-# https://cran.r-project.org/web/packages/fasterize/vignettes/using-fasterize.html
-biomes_ras <- rasterize(biome_shp, r_ref)
-
-## Make sure coordinates have the same projection
-spOcc_geo <- spTransform(spOcc_geo, crs(r_ref))
-
-## Create species, grid ID, biome dataframe
-system.time({
-  spOcc_geo$grid_id <- raster::extract(r_ref,spOcc_geo,factors=TRUE)
-  spOcc_geo$Biomes <- raster::extract(biomes_ras,spOcc_geo,factors=TRUE)
-})
-
-cell_nas <- which(is.na(spOcc_geo$Biomes))
-
-
-# then take the raster value with lowest distance to point AND non-NA value in the raster
-cell_nearest <- function(xy) {
-  
-  biomes_ras@data@values[which.min(replace(distanceFromPoints(biomes_ras, xy), is.na(biomes_ras), NA))]
-  
-}
-
-# This takes around two hours to finish
-system.time({
-  sampled = apply(X = coordinates(spOcc_geo[cell_nas,]), MARGIN = 1, FUN = cell_nearest)
-})
-
-spOcc_geo$Biomes[cell_nas] <- sampled
-
-write_rds(spOcc_geo,"./outputs/02_Species_grid_id_biomes_df.rds")
+# Convert into a normal dataframe
+spOcc_geo_df <- as_tibble(spOcc_geo)
 
 
 ## Number of cells per species in each biome
-cells_in_sp<-spPresence_biome %>% 
-  group_by(Species,biomes) %>% 
-  summarise(N_cells=n_distinct(cells)) %>% 
-  group_by(Species) %>% 
+cells_in_sp<-spOcc_geo_df %>% 
+  group_by(scrubbed_species_binomial,Biomes) %>% 
+  summarise(N_cells=n_distinct(grid_id)) %>% 
+  group_by(scrubbed_species_binomial) %>% 
   mutate(Total_cells=sum(N_cells), prop_cells=N_cells/sum(N_cells)) %>% 
   mutate(max_prop=max(prop_cells))
 
-saveRDS(cells_in_sp, file="./outputs/spPresence_cell_prop_biomes_all.rds")
-
-cells_in_sp$biomes<-recode(cells_in_sp$biomes,Moist_Forest="Moist",
+cells_in_sp$Biomes<-recode(cells_in_sp$Biomes,Moist_Forest="Moist",
                                  Savannas="Savannas",
                                  Tropical_Grasslands="Trop_Grass",
                                  Dry_Forest="Dry",
@@ -98,20 +42,21 @@ cells_in_sp$biomes<-recode(cells_in_sp$biomes,Moist_Forest="Moist",
 
 # 2. Species list for each biome ------------------------------------------
 
+cells_in_sp$Species <- cells_in_sp$scrubbed_species_binomial
 # 2.1 Total numbr of species
-Total_sp_list<-tapply(cells_in_sp$Species,cells_in_sp$biomes,unique)
+Total_sp_list<-tapply(cells_in_sp$Species,cells_in_sp$Biomes,unique)
 
 # 2.2 Species with highest proportion of their ranges in each biome
 Wides_sp<-cells_in_sp %>% 
   dplyr::filter(prop_cells==max_prop)
 
-Wides_sp_list<-tapply(Wides_sp$Species,Wides_sp$biomes,unique)
+Wides_sp_list<-tapply(Wides_sp$Species,Wides_sp$Biomes,unique)
 
 # 2.3 Endemics for each biome
 Endemics_sp<-cells_in_sp %>% 
   dplyr::filter(prop_cells==1)
 
-Endemics_sp_list<-tapply(Endemics_sp$Species,Endemics_sp$biomes,unique)
+Endemics_sp_list<-tapply(Endemics_sp$Species,Endemics_sp$Biomes,unique)
 
 # 2.4 Proportion of endemics in each biome
 total_n<-unlist(lapply(Total_sp_list,length))
@@ -272,7 +217,7 @@ labels(fit_total_sim)<-c("Trop_Grass", "Moist","Savannas", "Dry","Xeric",
 dend_total<-
   fit_total_sim %>% 
   as.dendrogram() %>% 
-  color_branches(1,col=wes_palette("Cavalcanti")[2]) %>% 
+  color_branches(1,col=wes_palette("Cavalcanti1")[2]) %>% 
   set("branches_lwd", 4)  %>% 
   set("labels_cex", 1.5)
 
