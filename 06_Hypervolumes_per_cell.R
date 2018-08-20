@@ -10,22 +10,25 @@ source("./functions/Biomes_hypervolumes_fun.R")
 
 # data --------------------------------------------------------------------
 # 1. Trait data frame
-Traits_phylo<-read.csv("./data/processed/traits_ALLMB_lambda.csv")
+Traits_phylo<-read.csv("./data/traits/traits_ALLMB_lambda.csv")
 
 # 2. Values of distinctiveness and Restrictedness for species per biome
-Biome_Di_Ri<-read.csv("./outputs/Biome_Di_Ri_phylo.csv", row.names = 1)
+Biome_Di_Ri<-read.csv("./outputs/04_Biome_Di_Ri_phylo.csv", row.names = 1)
 
 # 5. Presence matrix of species
-spPresence<-read.csv("./data/base/BIEN_2_Ranges/presence100km.csv")
-names(spPresence) = c("Species","Y","X")
-TraitSpecies <- unique(Traits_phylo$species)
-spMatrix_sub <- splistToMatrix(spPresence,TraitSpecies)
+species_cell_biomes <- readRDS("./outputs/02_Species_grid_id_biomes_df.rds")
 
-## Remove cells without species
-indx<-which(rowSums(spMatrix_sub)!=0)
-spMatrix_sub<-spMatrix_sub[indx,]
+## Remove species without traits
+species_cell_biomes$Species <- gsub(" ", "_", species_cell_biomes$scrubbed_species_binomial)
 
-# Data manipulation -------------------------------------------------------
+species_cell_biomes<- species_cell_biomes %>% 
+  dplyr::filter(Species%in%unique(Traits_phylo$species))
+
+
+spMatrix_sub <- table(species_cell_biomes$grid_id,species_cell_biomes$Species)
+
+  
+  # Data manipulation -------------------------------------------------------
 # 1. Merging data frames
 Traits_Biome_Di_Ri<-merge(Biome_Di_Ri,Traits_phylo)
 
@@ -77,12 +80,7 @@ Trait_df<-
 
 
 ### Taking only the 10% of the cells per each biomes
-cell_biomes_df<-readRDS("./outputs/spPresence_biomes_all.rds")
-
-cell_biomes<-cell_biomes_df %>%
-  filter(Species%in%Trait_df$species)
-
-cell_biomes <-tapply(cell_biomes$cells, cell_biomes$biomes, unique)
+cell_biomes <-tapply(species_cell_biomes$grid_id, species_cell_biomes$Biomes, unique)
 
 Random_cells<-
   lapply(cell_biomes,
@@ -90,14 +88,13 @@ Random_cells<-
            sample(x,length(x)*.20)
   )
 
-Random_cells<-lapply(Random_cells, function(x)paste("Cell",x,sep="_"))
-
-cells_names<-as.vector(unlist(Random_cells))
+cells_names<-as.character(as.vector(unlist(Random_cells)))
 
 Tmp<-NULL
 
 for (i in cells_names)
 {
+  print(i)
   x<-spMatrix_sub[i,]
 
   print(paste("Processing",length(Tmp)))
@@ -116,7 +113,7 @@ for (i in cells_names)
     cell_hyper<-Trait_df %>%
       filter(species%in%sample_sp) %>%
       dplyr::select(contains("Scaled")) %>%
-      hypervolume_box()
+      hypervolume_gaussian()
 
     res<-cell_hyper@Volume
 
@@ -126,7 +123,7 @@ for (i in cells_names)
 
   }
   Tmp<-c(Tmp,res)
-  write_rds(Tmp,"outputs/Hypervolume_sp_sample_box.rds")
+  write_rds(Tmp,"./outputs/06_Hypervolume_sp_sample_box.rds")
 }
 
 names(Tmp)<-cells_names
@@ -184,7 +181,7 @@ for (j in 1:50){
   Random_cells<-
     lapply(cell_biomes,
            function(x)
-             sample(x,length(x)*.10)
+             sample(x,length(x)*.20)
     )
 
   Random_cells<-lapply(Random_cells, function(x)paste("Cell",x,sep="_"))
