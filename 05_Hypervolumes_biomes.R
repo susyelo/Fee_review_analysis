@@ -130,8 +130,6 @@ legend("bottomleft",legend = c("Moist","Dry", "Savanna"),
 dev.off()
 
 
-
-
 ## Similarity hypervolumes with the total species
 Total_Sim<-similarity_hypervol(Total_hypervol)
 #saveRDS(Total_Sim, "./outputs/05_Total_similarity_hypervolumes.rds")
@@ -173,7 +171,7 @@ dev.off()
 ## Hypervolumes for widespread and redundant species
 Redun_Wides_hypervol<-
   Traits_Biome_Di_Ri %>%
-  dplyr::filter(Widespread > 0.5 & DiScale < 0.25) %>%
+  dplyr::filter(DiScale < 0.25) %>%
   dplyr::select(Biome,contains("Scaled")) %>%
   Biomes_hypervolume(biome_names)
 
