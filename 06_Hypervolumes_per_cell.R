@@ -97,37 +97,46 @@ for (i in cells_names)
   print(i)
   x<-spMatrix_sub[i,]
 
-  print(paste("Processing",length(Tmp)))
+  print(paste("Processing",i))
 
-  cell_names<-names(x[x > 0 & !is.na(x)])
+  sp_names<-names(x[x > 0 & !is.na(x)])
 
-  if(length(cell_names)>100){
+  #if(length(sp_names)>100){
 
-    sample_sp<-sample(cell_names,100)
-  }else{
-    sample_sp<-cell_names
-  }
+   # sample_sp<-sample(sp_names,100)
+  #}else{
+   # sample_sp<-sp_names
+  #}
 
   if (length(cell_names)>1){
 
-    cell_hyper<-Trait_df %>%
-      filter(species%in%sample_sp) %>%
-      dplyr::select(contains("Scaled")) %>%
-      hypervolume_gaussian()
-
-    res<-cell_hyper@Volume
+    res<- tryCatch({
+      cell_hyper<-Trait_df %>%
+        filter(species%in%sample_sp) %>%
+        dplyr::select(contains("Scaled")) %>%
+        hypervolume_gaussian()
+      
+      cell_hyper@Volume
+    
+    }, 
+    error = function(cond){
+      message("Species with the same trait values")
+      return(NA)
+    })
 
   }else{
 
     res=length(cell_names)
 
   }
-  Tmp<-c(Tmp,res)
+  
+  tmp_df <- data.frame(cell = i, vol = res)
+  
+  Tmp<-rbind(Tmp,tmp_df)
+  
   write_rds(Tmp,"./outputs/06_Hypervolume_sp_sample_box.rds")
 }
 
-names(Tmp)<-cells_names
-write_rds(Tmp,"outputs/Hypervolume_sp_sample_box_newHypervolumeCal.rds")
 
 cell_hyper_df<-data.frame(cells=cells_names,Volume=Tmp)
 cell_hyper_df$cells<-as.numeric(gsub("Cell_","",cell_hyper_df$cells))
@@ -165,7 +174,6 @@ dev.off()
 
 
 ## Loop of 50 times
-
 
 ### Taking only the 10% of the cells per each biomes
 cell_biomes_df<-readRDS("./outputs/spPresence_biomes_all.rds")
