@@ -1,4 +1,5 @@
 # library -----------------------------------------------------------------
+library(rgdal)
 library(funrar)
 library(tidyverse)
 library(sp)
@@ -189,7 +190,8 @@ pdf("./figs/04_All_biomes_heatmap_logTraits2.pdf")
 Biome_Di_Ri %>% 
   ggplot(aes(Widespread, DiScale)) +
   stat_binhex(bins=20,aes(fill=log(..count..)))+
-  scale_fill_gradientn(colours=rev(c("#02401B","#02401B","#2C7C4C","#2C7C4C","#69A682","#ACCCB9")),name = "log(Richness)")  +
+  #scale_fill_gradientn(colours=rev(c("#02401B","#02401B","#2C7C4C","#2C7C4C","#69A682","#ACCCB9")),name = "log(Richness)")  +
+  scale_fill_gradient(low =  "#00AFBB", high = "#FC4E07") +
   theme_minimal()+
   facet_wrap( ~ Biome, ncol = 3)+
   ylab("Distinctiveness")+
