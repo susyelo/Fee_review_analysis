@@ -92,6 +92,8 @@ cells_names<-as.character(as.vector(unlist(Random_cells)))
 
 Tmp<-NULL
 
+system.time(
+
 for (i in cells_names)
 {
   print(i)
@@ -108,11 +110,11 @@ for (i in cells_names)
    # sample_sp<-sp_names
   #}
 
-  if (length(cell_names)>1){
+  if (length(sp_names)>1){
 
     res<- tryCatch({
       cell_hyper<-Trait_df %>%
-        filter(species%in%sample_sp) %>%
+        filter(species%in%sp_names) %>%
         dplyr::select(contains("Scaled")) %>%
         hypervolume_gaussian()
       
@@ -126,7 +128,7 @@ for (i in cells_names)
 
   }else{
 
-    res=length(cell_names)
+    res=NA
 
   }
   
@@ -136,7 +138,7 @@ for (i in cells_names)
   
   write_rds(Tmp,"./outputs/06_Hypervolume_sp_sample_box.rds")
 }
-
+)
 
 cell_hyper_df<-data.frame(cells=cells_names,Volume=Tmp)
 cell_hyper_df$cells<-as.numeric(gsub("Cell_","",cell_hyper_df$cells))
