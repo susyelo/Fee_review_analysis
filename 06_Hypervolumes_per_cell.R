@@ -21,13 +21,13 @@ species_cell_biomes <- readRDS("./outputs/02_Species_grid_id_biomes_df.rds")
 ## Remove species without traits
 species_cell_biomes$Species <- gsub(" ", "_", species_cell_biomes$scrubbed_species_binomial)
 
-species_cell_biomes<- species_cell_biomes %>% 
+species_cell_biomes<- species_cell_biomes %>%
   dplyr::filter(Species%in%unique(Traits_phylo$species))
 
 
 spMatrix_sub <- table(species_cell_biomes$grid_id,species_cell_biomes$Species)
 
-  
+
   # Data manipulation -------------------------------------------------------
 # 1. Merging data frames
 Traits_Biome_Di_Ri<-merge(Biome_Di_Ri,Traits_phylo)
@@ -91,15 +91,17 @@ Random_cells<-
 cells_names<-as.character(as.vector(unlist(Random_cells)))
 
 Tmp<-NULL
+count <- 0
 
 system.time(
 
 for (i in cells_names)
 {
   print(i)
-  x<-spMatrix_sub[i,]
+  count <- count + 1
+  x <- spMatrix_sub[i,]
 
-  print(paste("Processing",i))
+  print(paste("Processing",count, "out of ",length(cells_names)))
 
   sp_names<-names(x[x > 0 & !is.na(x)])
 
@@ -117,10 +119,10 @@ for (i in cells_names)
         filter(species%in%sp_names) %>%
         dplyr::select(contains("Scaled")) %>%
         hypervolume_gaussian()
-      
+
       cell_hyper@Volume
-    
-    }, 
+
+    },
     error = function(cond){
       message("Species with the same trait values")
       return(NA)
@@ -131,11 +133,11 @@ for (i in cells_names)
     res=NA
 
   }
-  
+
   tmp_df <- data.frame(cell = i, vol = res)
-  
+
   Tmp<-rbind(Tmp,tmp_df)
-  
+
   write_rds(Tmp,"./outputs/06_Hypervolume_sp_sample_box.rds")
 }
 )
@@ -173,4 +175,3 @@ ggplot(data=cell_hyper_df,aes(x=biomes,y=Volume)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   xlab("")+ylab(expression(paste("SD"^"6")))
 dev.off()
-
