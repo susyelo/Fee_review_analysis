@@ -142,11 +142,10 @@ for (i in cells_names)
 }
 )
 
-cell_hyper_df<-data.frame(cells=cells_names,Volume=Tmp)
-cell_hyper_df$cells<-as.numeric(gsub("Cell_","",cell_hyper_df$cells))
+cell_hyper_df <- Tmp
 
-indx<-match(cell_hyper_df$cells,cell_biomes_df$cells)
-cell_hyper_df$biomes<-cell_biomes_df$biomes[indx]
+indx<-match(cell_hyper_df$cell,species_cell_biomes$grid_id)
+cell_hyper_df$biomes<-species_cell_biomes$Biomes[indx]
 
 cell_hyper_df$biomes<-factor(cell_hyper_df$biomes,
                              levels=c("Moist_Forest","Savannas","Tropical_Grasslands",
@@ -168,10 +167,44 @@ cell_hyper_df$biomes<-recode(cell_hyper_df$biomes,Moist_Forest="Moist",
 
 library(wesanderson)
 
-pdf("./figs/Hypervolume_cells_spNewHypervolume_box.pdf", width=10)
-ggplot(data=cell_hyper_df,aes(x=biomes,y=Volume)) +
+pdf("./figs/06_Hypervolume_cells_sp.pdf", width=10)
+ggplot(data=cell_hyper_df,aes(x=biomes,y=vol)) +
   geom_boxplot()+
   geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   xlab("")+ylab(expression(paste("SD"^"6")))
 dev.off()
+
+
+### Richness vs hypervolumes plots
+spMatrix_sub[which(spMatrix_sub>0)]<-1
+
+cell_richness <- rowSums(spMatrix_sub)
+
+indx<-match(cell_hyper_df$cell,names(cell_richness))
+cell_hyper_df$Richness<-cell_richness[indx]
+
+
+## Ignoring the cells with hypervolumes more than 250
+cell_hyper_df %>% 
+  filter(vol<250) %>% 
+  with(plot(log(Richness),vol))
+
+
+# Use box plot as marginal plots
+library(ggpmisc)
+library(ggpubr)
+
+biomes_to_plot <- c("Moist","Dry","Trop_Grass")
+
+cell_hyper_df$logRich <- log(cell_hyper_df$Richness)
+cell_hyper_df$sqrtVol <- sqrt(cell_hyper_df$vol)
+
+tmp_df <- cell_hyper_df %>% 
+  filter(biomes%in%biomes_to_plot)
+
+ggscatterhist(data = tmp_df, x = "logRich", y = "sqrtVol",
+              color = "biomes", size = 3, alpha = 0.6,
+              palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+              margin.plot = "boxplot",
+              ggtheme = theme_bw())
