@@ -44,10 +44,15 @@ system.time({
   spOcc_geo$Biomes <- raster::extract(biomes_ras,spOcc_geo,factors=TRUE)
 })
 
+## Eliminate the occurrences out of the extent of the biomes raster
+spOcc_geo <- spOcc_geo[!is.na(spOcc_geo$grid_id),]
+
+# then take the raster value with lowest distance to point AND non-NA value in the raster
+# Classify grid without biome class
+
 cell_nas <- which(is.na(spOcc_geo$Biomes))
 
 
-# then take the raster value with lowest distance to point AND non-NA value in the raster
 cell_nearest <- function(xy) {
   
   biomes_ras@data@values[which.min(replace(distanceFromPoints(biomes_ras, xy), is.na(biomes_ras), NA))]
