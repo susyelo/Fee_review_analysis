@@ -110,21 +110,93 @@ dev.off()
 
 # 1. Data  -----------------------------------------------------------------
 
-# Shapefiles
-biome_shp <- shapefile("./data/maps/Olson_processed/Biomes_olson_projected.shp")
+## Since there are a lot of NAs that are on the coast I will use the dataframe used in the original analysis
 
-# Using Richness raster as template raster
-r_Total_Rich<-raster("./data/base/BIEN_2_Ranges/richness100km.tif")
+spPresence_biomes <- readRDS("./data/spPresence_biomes_all.rds")
 
-# 2. Create dataframes  -----------------------------------------------------
-## Rasterize Biomes shapefile 100 km^2
-r_ref <- r_Total_Rich
-r_ref[] <- 1:ncell(r_ref)
+spMatrix_SDM_total <- table(spPresence_biomes$cells,spPresence_biomes$Species)
 
-## Rasterize the biomes
-# https://cran.r-project.org/web/packages/fasterize/vignettes/using-fasterize.html
-biomes_ras <- rasterize(biome_shp, r_ref)
+spMatrix_SDM_total[which(spMatrix_SDM_total > 0)] <- 1
+Sp_Rich_SDM_total<- rowSums(spMatrix_SDM_total)
 
-boxplot(log(r_Total_Rich),biomes_ras)
+## Include the richnnes values to a dataframe
+grid_richness_SDM <- data.frame(grid_id = names(Sp_Rich_SDM_total), 
+                                Richness = Sp_Rich_SDM_total)
+
+indx<-match(grid_richness_SDM$grid_id,spPresence_biomes$cells)
+
+grid_richness_SDM$Biomes <- spPresence_biomes$biomes[indx]
 
 
+grid_richness_SDM$Biomes<-recode(grid_richness_SDM$Biomes,Moist_Forest="Moist",
+                                  Savannas="Savannas",
+                                  Tropical_Grasslands="Trop_Grass",
+                                  Dry_Forest="Dry",
+                                  Xeric_Woodlands="Xeric",
+                                  Mediterranean_Woodlands="Mediterranean",
+                                  Temperate_Grasslands="Temp_Grass",
+                                  Temperate_Mixed="Temp_Mixed",
+                                  Coniferous_Forests="Coniferous",
+                                  Taiga="Taiga",
+                                  Tundra="Tundra")
+
+grid_richness_SDM$Biomes<-factor(grid_richness_SDM$Biomes,
+                                  levels=c("Moist","Savannas","Trop_Grass",
+                                           "Dry","Xeric","Mediterranean",
+                                           "Temp_Grass","Temp_Mixed","Coniferous",
+                                           "Taiga","Tundra"))
+
+png("./figs/Total_richnnes_SDM.png", width = 700)
+ggplot(data=grid_richness_SDM,aes(x=Biomes,y=log(Richness+1))) +
+  geom_boxplot()+
+  geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  xlab("")+ylab(expression(paste("Richness")))
+dev.off()
+
+### Richness counting only those species with traits
+
+spPresence_biomes_traits <- 
+  spPresence_biomes %>% 
+  dplyr::filter(Species%in%unique(Traits_phylo$species))
+
+
+spMatrix_SDM_trait <- table(spPresence_biomes_traits$cells,spPresence_biomes_traits$Species)
+
+spMatrix_SDM_trait[which(spMatrix_SDM_trait > 0)] <- 1
+Sp_Rich_SDM_traits<- rowSums(spMatrix_SDM_trait)
+
+## Include the richnnes values to a dataframe
+grid_richness_SDM_trait <- data.frame(grid_id = names(Sp_Rich_SDM_traits), 
+                                Richness = Sp_Rich_SDM_traits)
+
+indx<-match(grid_richness_SDM_trait$grid_id,spPresence_biomes_traits$cells)
+
+grid_richness_SDM_trait$Biomes <- spPresence_biomes_traits$biomes[indx]
+
+
+grid_richness_SDM_trait$Biomes<-recode(grid_richness_SDM_trait$Biomes,Moist_Forest="Moist",
+                                 Savannas="Savannas",
+                                 Tropical_Grasslands="Trop_Grass",
+                                 Dry_Forest="Dry",
+                                 Xeric_Woodlands="Xeric",
+                                 Mediterranean_Woodlands="Mediterranean",
+                                 Temperate_Grasslands="Temp_Grass",
+                                 Temperate_Mixed="Temp_Mixed",
+                                 Coniferous_Forests="Coniferous",
+                                 Taiga="Taiga",
+                                 Tundra="Tundra")
+
+grid_richness_SDM_trait$Biomes<-factor(grid_richness_SDM_trait$Biomes,
+                                 levels=c("Moist","Savannas","Trop_Grass",
+                                          "Dry","Xeric","Mediterranean",
+                                          "Temp_Grass","Temp_Mixed","Coniferous",
+                                          "Taiga","Tundra"))
+
+png("./figs/Trait_richnnes_SDM.png", width = 700)
+ggplot(data=grid_richness_SDM_trait,aes(x=Biomes,y=log(Richness+1))) +
+  geom_boxplot()+
+  geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  xlab("")+ylab(expression(paste("Richness")))
+dev.off()
