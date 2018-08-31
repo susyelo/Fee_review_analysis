@@ -79,8 +79,127 @@ Trait_df<-
   dplyr::select(species,contains("Scaled"))
 
 
+## Remove the cells that are undersampled
+cell_N_records <- rowSums(spMatrix_sub)
+undesampled_cells <- names(cell_N_records)[which(cell_N_records<100)]
+ix <- which(as.character(species_cell_biomes$grid_id)%in%undesampled_cells==FALSE)
+
+species_cell_biomes <- species_cell_biomes[ix,]
+species_cell_biomes <- species_cell_biomes[!is.na(species_cell_biomes$grid_id),]
+
 ### Taking only the 10% of the cells per each biomes
 cell_biomes <-tapply(species_cell_biomes$grid_id, species_cell_biomes$Biomes, unique)
+
+### Run the hypervolumes for cells in Dry, xeric and mediterranean biomes
+cell_biomes_ss <- cell_biomes[c("Dry_Forest", "Xeric_Woodlands", "Mediterranean_Woodlands")]
+
+## Calculate the hypevolumes for these environments
+cells_names_ss<-as.character(as.vector(unlist(cell_biomes_ss)))
+
+Hyper_biomes<-NULL
+count <- 0
+
+system.time(
+  
+  for (i in cells_names_ss)
+  {
+    print(i)
+    count <- count + 1
+    x <- spMatrix_sub[i,]
+    
+    print(paste("Processing",count, "out of ",length(cells_names_ss)))
+    
+    sp_names<-names(x[x > 0 & !is.na(x)])
+    
+    if (length(sp_names)>1){
+      
+      res<- tryCatch({
+        cell_hyper<-Trait_df %>%
+          filter(species%in%sp_names) %>%
+          dplyr::select(contains("Scaled")) %>%
+          hypervolume_box()
+        
+        cell_hyper@Volume
+        
+      },
+      error = function(cond){
+        message("Species with the same trait values")
+        return(NA)
+      })
+      
+    }else{
+      
+      res=NA
+      
+    }
+    
+    tmp_df <- data.frame(cell = i, vol = res)
+    
+    Hyper_biomes<-rbind(Hyper_biomes,tmp_df)
+    
+    write_rds(Hyper_biomes, "06_Hypervolume_sp_occ_biomes_DXM.rds")
+  }
+)
+
+
+indx<-match(Hyper_biomes$cell,species_cell_biomes$grid_id)
+Hyper_biomes$biomes<-species_cell_biomes$Biomes[indx]
+
+biomes_tmp <- c("Dry_Forest", "Xeric_Woodlands", "Mediterranean_Woodlands")
+
+
+Hyper_biomes <- 
+  Hyper_biomes %>% 
+  dplyr::filter(biomes%in%biomes_tmp)
+  
+Hyper_biomes$biomes <- as.factor(Hyper_biomes$biomes)
+
+Hyper_biomes$biomes<-factor(Hyper_biomes$biomes,
+                             levels=c("Dry_Forest","Xeric_Woodlands","Mediterranean_Woodlands"))
+
+Hyper_biomes$biomes<-recode(Hyper_biomes$biomes,
+                             Dry_Forest="Dry",
+                             Xeric_Woodlands="Xeric",
+                             Mediterranean_Woodlands="Mediterranean")
+
+library(wesanderson)
+
+pdf("./figs/06_Hypervolume_cells_occ_DXM.pdf", width=10)
+ggplot(data=Hyper_biomes,aes(x=biomes,y=vol)) +
+  geom_boxplot()+
+  geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  xlab("")+ylab(expression(paste("SD"^"6")))
+dev.off()
+
+
+## plot richness vs hypervolumes
+spMatrix_sub_copy <- spMatrix_sub
+
+spMatrix_sub_copy[which(spMatrix_sub_copy>0)]<-1
+
+cell_richness <- rowSums(spMatrix_sub_copy)
+
+indx<-match(Hyper_biomes$cell,names(cell_richness))
+Hyper_biomes$Richness<-cell_richness[indx]
+
+
+library(ggpmisc)
+library(ggpubr)
+
+Hyper_biomes$logRich <- log(Hyper_biomes$Richness)
+
+pdf("./figs/06_Richness_vs_Hypervolumes_DXM.pdf", width=10)
+
+ggscatterhist(data = Hyper_biomes, x = "logRich", y = "vol",
+              color = "biomes", size = 3, alpha = 0.6,
+              palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+              margin.plot = "boxplot",
+              ggtheme = theme_bw())
+dev.off()
+
+### Calculating hypervolumes for all the biomes -----
+
 
 Random_cells<-
   lapply(cell_biomes,
