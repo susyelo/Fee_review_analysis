@@ -138,7 +138,7 @@ for (i in cells_names)
 
   Tmp<-rbind(Tmp,tmp_df)
 
-  write_rds(Tmp,"./outputs/06_Hypervolume_sp_sample_box.rds")
+  write_rds(Tmp, "06_Hypervolume_sp_sample_box_occurrences.rds")
 }
 )
 
@@ -176,10 +176,28 @@ ggplot(data=cell_hyper_df,aes(x=biomes,y=vol)) +
 dev.off()
 
 
-### Richness vs hypervolumes plots
-spMatrix_sub[which(spMatrix_sub>0)]<-1
 
-cell_richness <- rowSums(spMatrix_sub)
+## Ignoring the cells that have less than 100 records
+
+cell_N_records <- rowSums(spMatrix_sub)
+undesampled_cells <- names(cell_N_records)[which(cell_N_records<100)]
+ix <- which(cell_hyper_df$cell%in%undesampled_cells==FALSE)
+
+pdf("./figs/06_Hypervolume_cells_occ_NoUndersampled.pdf", width=10)
+ggplot(data=cell_hyper_df[ix,],aes(x=biomes,y=vol)) +
+  geom_boxplot()+
+  geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  xlab("")+ylab(expression(paste("SD"^"6")))
+dev.off()
+
+### Richness vs hypervolumes plots
+
+spMatrix_sub_copy <- spMatrix_sub
+
+spMatrix_sub_copy[which(spMatrix_sub_copy>0)]<-1
+
+cell_richness <- rowSums(spMatrix_sub_copy)
 
 indx<-match(cell_hyper_df$cell,names(cell_richness))
 cell_hyper_df$Richness<-cell_richness[indx]
@@ -187,7 +205,7 @@ cell_hyper_df$Richness<-cell_richness[indx]
 
 ## Ignoring the cells with hypervolumes more than 250
 cell_hyper_df %>% 
-  filter(vol<250) %>% 
+  filter(vol<350) %>% 
   with(plot(log(Richness),vol))
 
 
@@ -195,7 +213,7 @@ cell_hyper_df %>%
 library(ggpmisc)
 library(ggpubr)
 
-biomes_to_plot <- c("Moist","Dry","Trop_Grass")
+biomes_to_plot <- c("Mediterranean","Dry","Xeric")
 
 cell_hyper_df$logRich <- log(cell_hyper_df$Richness)
 cell_hyper_df$sqrtVol <- sqrt(cell_hyper_df$vol)
@@ -203,7 +221,16 @@ cell_hyper_df$sqrtVol <- sqrt(cell_hyper_df$vol)
 tmp_df <- cell_hyper_df %>% 
   filter(biomes%in%biomes_to_plot)
 
-ggscatterhist(data = tmp_df, x = "logRich", y = "sqrtVol",
+ggscatterhist(data = tmp_df, x = "logRich", y = "vol",
+              color = "biomes", size = 3, alpha = 0.6,
+              palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+              margin.plot = "boxplot",
+              ggtheme = theme_bw())
+
+
+## Ignoring undersampled grids
+ix <- which(tmp_df$cell%in%undesampled_cells==FALSE)
+ggscatterhist(data = tmp_df[ix,], x = "logRich", y = "vol",
               color = "biomes", size = 3, alpha = 0.6,
               palette = c("#00AFBB", "#E7B800", "#FC4E07"),
               margin.plot = "boxplot",
