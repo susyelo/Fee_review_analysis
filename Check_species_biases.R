@@ -158,7 +158,8 @@ ggplot(data=grid_richness_SDM,aes(x=Biomes,y=log(Richness+1))) +
   geom_boxplot()+
   geom_jitter(alpha=0.5,color=wes_palette("Cavalcanti1")[4])+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-  xlab("")+ylab(expression(paste("Richness")))
+  xlab("")+ylab(expression(paste("Richness"))) +
+  ylim(2.5,9)
 dev.off()
 
 ### Richness counting only those species with traits
