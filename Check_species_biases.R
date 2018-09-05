@@ -20,6 +20,13 @@ spOcc_geo_df <- as_tibble(spOcc_geo)
 ## Species richnnes per biomes
 spMatrix_occ <- table(spOcc_geo_df$grid_id,spOcc_geo_df$scrubbed_species_binomial)
 
+cell_N_records <- rowSums(spMatrix_occ)
+undesampled_cells <- names(cell_N_records)[which(cell_N_records<100)]
+
+
+ix <- which(rownames(spMatrix_occ)%in%undesampled_cells==FALSE)
+spMatrix_occ <- spMatrix_occ[ix,]
+
 spMatrix_occ[which(spMatrix_occ > 0)] <- 1
 Sp_Rich_Occ <- rowSums(spMatrix_occ)
 
